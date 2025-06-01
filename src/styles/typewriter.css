@@ -1,0 +1,22 @@
+@keyframes typewriter {
+    from { width: 0; }
+    to { width: 100%; }
+  }
+  
+  .typewriter-effect {
+    animation: typewriter 5s steps(50, end) infinite alternate;
+    white-space: nowrap;
+    overflow: hidden;
+    border-right: 2px solid white;
+  }
+
+  .typing-cursor {
+    display: inline-block;
+    animation: blink 1s steps(1) infinite;
+  }
+  
+  @keyframes blink {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0; }
+  }
+  
