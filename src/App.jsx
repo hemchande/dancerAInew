@@ -18,6 +18,12 @@ import ExpertFeedback from './components/ExpertFeedback';
 import Navigation from './components/Navigation';
 import { config } from './config/config';
 
+
+
+
+
+console.log(config)
+
 const openai = new OpenAI({
   apiKey: process.env.REACT_APP_OPENAI_API_KEY,
   dangerouslyAllowBrowser: true
