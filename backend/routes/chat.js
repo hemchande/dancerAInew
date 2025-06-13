@@ -136,7 +136,7 @@ router.delete('/sessions/:sessionId', auth, async (req, res) => {
       return res.status(403).json({ message: 'Not authorized' });
     }
 
-    await session.remove();
+    await ChatSession.findByIdAndDelete(req.params.sessionId);
     
     // Remove session from user's chatSessions array
     user.chatSessions = user.chatSessions.filter(id => id.toString() !== session._id.toString());

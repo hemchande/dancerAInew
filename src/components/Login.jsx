@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Container,
   Paper,
@@ -25,7 +25,13 @@ const Login = () => {
   const [error, setError] = useState('');
   
   const navigate = useNavigate();
-  const { login, register } = useAuth();
+  const { login, register, user } = useAuth();
+
+  useEffect(() => {
+    if (user) {
+      navigate('/dashboard');
+    }
+  }, [user, navigate]);
 
   const handleTabChange = (event, newValue) => {
     setActiveTab(newValue);

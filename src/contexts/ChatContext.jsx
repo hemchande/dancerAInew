@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { useAuth } from './AuthContext';
 import axios from 'axios';
+import { config } from '../config/config';
 
 const ChatContext = createContext();
 
@@ -18,7 +19,8 @@ export const ChatProvider = ({ children }) => {
       if (!user) return;
       
       const token = await getAuthToken();
-      const response = await axios.get('http://localhost:8000/chat/sessions', {
+      console.log(config.API_URL)
+      const response = await axios.get(`${config.API_URL}/chat/sessions`, {
         headers: {
           Authorization: `Bearer ${token}`
         }
@@ -41,7 +43,7 @@ export const ChatProvider = ({ children }) => {
   const createChatSession = async (title = 'New Chat') => {
     try {
       const token = await getAuthToken();
-      const response = await axios.post('http://localhost:8000/chat/sessions', 
+      const response = await axios.post(`${config.API_URL}/chat/sessions`, 
         { title },
         {
           headers: {
@@ -61,7 +63,7 @@ export const ChatProvider = ({ children }) => {
     try {
       const token = await getAuthToken();
       const response = await axios.post(
-        `http://localhost:8000/chat/sessions/${sessionId}/messages`,
+        `${config.API_URL}/chat/sessions/${sessionId}/messages`,
         {
           role: 'ai',
           content: feedback,
@@ -96,7 +98,7 @@ export const ChatProvider = ({ children }) => {
   const deleteChatSession = async (sessionId) => {
     try {
       const token = await getAuthToken();
-      await axios.delete(`http://localhost:8000/chat/sessions/${sessionId}`, {
+      await axios.delete(`${config.API_URL}/chat/sessions/${sessionId}`, {
         headers: {
           Authorization: `Bearer ${token}`
         }

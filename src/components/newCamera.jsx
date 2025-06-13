@@ -15,8 +15,8 @@ import DownloadIcon from '@mui/icons-material/Download';
 import SettingsIcon from '@mui/icons-material/Settings';
 import { saveBalletSession, getBalletSessions, deleteBalletSession } from '../utils/balletSessionStorage';
 import { useChat } from '../contexts/ChatContext';
+import { useAuth } from '../contexts/AuthContext';
 import axios from 'axios';
-import { getAuthToken } from '../utils/auth';
 import config from '../config/config';
 
 const overlayActions = ["Arabesque", "Attitude", "Ballon", "Battement", "Brisé", "Cabriole", "Changement", "Chassé"];
@@ -95,6 +95,7 @@ const compressImage = (base64String, maxWidth = 800) => {
 };
 
 const BalletCamera1 = () => {
+  const { user, getAuthToken } = useAuth();
   const [actionIndex, setActionIndex] = useState(0);
   const [feedback, setFeedback] = useState("No feedback yet.");
   const [isLoading, setIsLoading] = useState(false);
@@ -131,6 +132,9 @@ const BalletCamera1 = () => {
   const [sessionStartTime, setSessionStartTime] = useState(null);
   const [isSessionActive, setIsSessionActive] = useState(false);
 
+
+  const FRAME_BATCH_SIZE = 5;
+  const [frameBuffer, setFrameBuffer] = useState([]);
   const openai = new OpenAI({
     apiKey: process.env.REACT_APP_OPENAI_API_KEY,
     dangerouslyAllowBrowser: true
@@ -172,6 +176,68 @@ const BalletCamera1 = () => {
     setSessionImage(null);
     setFeedback("Session started. Feedback will appear here...");
   };
+
+
+  const generateFeedbackFromFrames = async (imageFrames) => {
+    if (!isSessionActive) return;
+  
+    try {
+      setIsLoading(true);
+  
+      const userMessage = [
+        { type: 'text', text: 'Please analyze this dance sequence and provide feedback across frames. Mention posture changes, errors, and transitions.' },
+        ...imageFrames.map(img => ({ type: 'image_url', image_url: { url: img } }))
+      ];
+  
+      const stream = await openai.chat.completions.create({
+        model: 'gpt-4o',
+        messages: [
+          {
+            role: 'system',
+            content: 'You are a professional ballet coach. Provide feedback across a sequence of frames. Identify patterns in posture, movement, alignment, and give actionable corrections.'
+          },
+          {
+            role: 'user',
+            content: `EXAMPLE: Review the following ballet sequence: [arms rounded but not fully extended, knees bent on landing, head looking down, transition from arabesque to plié is rushed]
+          
+          Feedback:
+          - Arms: Extend elbows fully and maintain rounded shape; avoid drooping wrists.
+          - Knees: Soften the landing by absorbing with the full foot and straightening after.
+          - Head: Keep chin lifted and gaze forward for better posture.
+          - Transition: Slow down the shift from arabesque to plié for better control and fluidity.`
+          },
+          {
+            role: 'user',
+            content: `Now, review this ballet sequence: ${userMessage}
+Provide feedback in a similar concise, body-part-organized format.`
+          }
+        ],
+        max_tokens: 700,
+        stream: true
+      });
+  
+      let fullMessage = '';
+      for await (const chunk of stream) {
+        const token = chunk.choices[0]?.delta?.content || '';
+        fullMessage += token;
+        setFeedback(prev => prev + token);
+      }
+  
+      setAccumulatedFeedback(prev => prev + "\n\n" + fullMessage);
+      if (!sessionImage) setSessionImage(imageFrames[0]);
+  
+      if (currentChatSession) {
+        await saveCameraFeedback(fullMessage, imageFrames[0], currentChatSession._id);
+      }
+  
+      await analyzeFeedback(fullMessage);
+      setIsLoading(false);
+    } catch (error) {
+      console.error('Error generating feedback:', error);
+      setIsLoading(false);
+    }
+  };
+  
 
   const generateFeedbackFromImage = async (imageData) => {
     if (!isSessionActive) return;
@@ -308,23 +374,41 @@ const BalletCamera1 = () => {
       setIsLoadingSessions(true);
       const token = await getAuthToken();
       
+      if (!token) {
+        console.log('No authentication token found. Please log in to view sessions.');
+        setFeedbackSessions([]);
+        return;
+      }
+      
       // First get the user profile to get the UID
       const userResponse = await axios.get(`${config.API_URL}/auth/profile`, {
-        headers: { Authorization: `Bearer ${token}` }
+        headers: { 
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
       });
       
       const userId = userResponse.data.uid;
       
       // Then fetch the AI reports using the UID
       const response = await axios.get(`${config.API_URL}/ai-reports/user/${userId}`, {
-        headers: { Authorization: `Bearer ${token}` }
+        headers: { 
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
       });
       
       console.log('Fetched AI sessions:', response.data);
       setFeedbackSessions(response.data);
     } catch (error) {
       console.error('Error fetching AI sessions:', error);
-      setFeedback(prev => prev + '\n\nError fetching previous sessions. Please try again.');
+      if (error.response?.status === 401) {
+        setFeedback('Your session has expired. Please log in again.');
+        setFeedbackSessions([]);
+      } else {
+        setFeedback(prev => prev + '\n\nError fetching previous sessions. Please try again.');
+        setFeedbackSessions([]);
+      }
     } finally {
       setIsLoadingSessions(false);
     }
@@ -333,6 +417,16 @@ const BalletCamera1 = () => {
   const saveCurrentSession = async () => {
     try {
       const token = await getAuthToken();
+      
+      if (!token) {
+        setFeedback('Please log in to save your session.');
+        return;
+      }
+
+      if (!sessionImage || !accumulatedFeedback) {
+        setFeedback('No session data to save. Please complete a session first.');
+        return;
+      }
       
       // Calculate overall score from performance scores and scale it to 0-10
       const rawScore = Math.round(
@@ -355,12 +449,26 @@ const BalletCamera1 = () => {
         description: 'Ballet practice session with AI feedback',
         feedback: sessionFeedback,
         overallScore,
-        summary: performanceScores.explanation
+        summary: performanceScores.explanation,
+        duration: sessionStats.duration,
+        exercises: sessionStats.exercises,
+        accuracy: sessionStats.accuracy
       };
 
+      console.log('Saving session with data:', report);
+
       const response = await axios.post(`${config.API_URL}/ai-reports`, report, {
-        headers: { Authorization: `Bearer ${token}` }
+        headers: { 
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
       });
+
+      if (!response.data) {
+        throw new Error('No data received from server');
+      }
+
+      console.log('Session saved successfully:', response.data);
 
       // Update local state
       setFeedbackSessions(prev => [response.data, ...prev]);
@@ -374,7 +482,11 @@ const BalletCamera1 = () => {
       
     } catch (error) {
       console.error('Error saving session:', error);
-      setFeedback(prev => prev + '\n\nError saving session. Please try again.');
+      if (error.response?.status === 401) {
+        setFeedback('Your session has expired. Please log in again.');
+      } else {
+        setFeedback(prev => prev + '\n\nError saving session: ' + (error.response?.data?.message || error.message || 'Please try again.'));
+      }
     }
   };
 
@@ -382,7 +494,10 @@ const BalletCamera1 = () => {
     try {
       const token = await getAuthToken();
       await axios.delete(`${config.API_URL}/ai-reports/${sessionId}`, {
-        headers: { Authorization: `Bearer ${token}` }
+        headers: { 
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
       });
       
       // Update local state

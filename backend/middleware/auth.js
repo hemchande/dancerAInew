@@ -1,14 +1,16 @@
 const admin = require('firebase-admin');
 
+require('dotenv').config(); // if using dotenv
+
 // Initialize Firebase Admin
 admin.initializeApp({
-  apiKey: "AIzaSyBS3ysLaF2J9uhMHFV1Lf7P9d-R3IhHVis",
-  authDomain: "connectarts-4ce5e.firebaseapp.com",
-  projectId: "connectarts-4ce5e",
-  storageBucket: "connectarts-4ce5e.appspot.com", // <-- fixed `.app` typo
-  messagingSenderId: "992637748222",
-  appId: "1:992637748222:web:6766064ee5ec1e6e2c76af",
-  measurementId: "G-YHW5Y6ET8F"
+  apiKey: process.env.FIREBASE_API_KEY,
+  authDomain: process.env.FIREBASE_AUTH_DOMAIN,
+  projectId: process.env.FIREBASE_PROJECT_ID,
+  storageBucket: process.env.FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: process.env.FIREBASE_MESSAGING_SENDER_ID,
+  appId: process.env.FIREBASE_APP_ID,
+  measurementId: process.env.FIREBASE_MEASUREMENT_ID
 });
 
 const auth = async (req, res, next) => {
@@ -37,4 +39,4 @@ const auth = async (req, res, next) => {
   }
 };
 
-module.exports = auth; 
+module.exports = auth;

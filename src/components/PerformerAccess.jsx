@@ -14,6 +14,7 @@ import {
 } from '@mui/material';
 import { Send as SendIcon } from '@mui/icons-material';
 import axios from 'axios';
+import { config } from '../config/config';
 
 const PerformerAccess = () => {
   const [instructorId, setInstructorId] = useState('');
@@ -34,7 +35,7 @@ const PerformerAccess = () => {
   const fetchInstructorContent = async (id) => {
     setLoading(true);
     try {
-      const response = await axios.get(`http://localhost:8000/instructor/${id}/content`);
+      const response = await axios.get(`${config.API_URL}/instructor/${id}/content`);
       setTranscript(response.data.transcript);
       setFeedback(response.data.feedback || []);
     } catch (error) {
@@ -49,7 +50,7 @@ const PerformerAccess = () => {
     if (!instructorId) return;
     setLoading(true);
     try {
-      const response = await axios.post(`http://localhost:8000/instructor/${instructorId}/feedback`, {
+      const response = await axios.post(`${config.API_URL}/instructor/${instructorId}/feedback`, {
         query: transcript
       });
       setFeedback([...feedback, {

@@ -16,6 +16,7 @@ import ProtectedRoute from './components/ProtectedRoute';
 import Register from './components/Register';
 import ExpertFeedback from './components/ExpertFeedback';
 import Navigation from './components/Navigation';
+import { config } from './config/config';
 
 const openai = new OpenAI({
   apiKey: process.env.REACT_APP_OPENAI_API_KEY,
@@ -47,7 +48,7 @@ const ChatUI = () => {
         if (!user) return;
         
         const token = await getAuthToken();
-        const response = await axios.get('http://localhost:8000/chat/sessions', {
+        const response = await axios.get(`${config.API_URL}/chat/sessions`, {
           headers: {
             Authorization: `Bearer ${token}`
           }
@@ -87,7 +88,7 @@ const ChatUI = () => {
       });
 
       const response = await axios.post(
-        'http://localhost:8000/chat/sessions',
+        `${config.API_URL}/chat/sessions`,
         { title: `${formattedDate} session` },
         {
           headers: {
@@ -115,7 +116,7 @@ const ChatUI = () => {
   const handleSessionClick = async (sessionId) => {
     try {
       const token = await getAuthToken();
-      const response = await axios.get(`http://localhost:8000/chat/sessions/${sessionId}`, {
+      const response = await axios.get(`${config.API_URL}/chat/sessions/${sessionId}`, {
         headers: {
           Authorization: `Bearer ${token}`
         }
@@ -166,7 +167,7 @@ const ChatUI = () => {
       
       // Save user message
       let response = await axios.post(
-        `http://localhost:8000/chat/sessions/${currentSessionId}/messages`,
+        `${config.API_URL}/chat/sessions/${currentSessionId}/messages`,
         userMessage,
         {
           headers: {
@@ -209,7 +210,7 @@ const ChatUI = () => {
       // Save AI message
       const aiMessage = { role: 'ai', content: generatedMessage };
       let response2 = await axios.post(
-        `http://localhost:8000/chat/sessions/${currentSessionId}/messages`,
+        `${config.API_URL}/chat/sessions/${currentSessionId}/messages`,
         aiMessage,
         {
           headers: {
@@ -243,7 +244,7 @@ const ChatUI = () => {
   const handleDeleteSession = async (sessionId) => {
     try {
       const token = await getAuthToken();
-      await axios.delete(`http://localhost:8000/chat/sessions/${sessionId}`, {
+      await axios.delete(`${config.API_URL}/chat/sessions/${sessionId}`, {
         headers: {
           Authorization: `Bearer ${token}`
         }
@@ -287,11 +288,9 @@ const ChatUI = () => {
         {/* AI Dance Reports */}
         <Typography variant="h6" sx={{ fontWeight: 600, mt: 2, mb: 1 }}>AI Dance Reports</Typography>
         <List>
-          {chatSessions.map(report => (
-            <ListItem button key={report.id} onClick={() => navigate(`/aireports/${report.id}`)}>
-              <ReportIcon sx={{ color: '#FF1493', mr: 1 }} /> {report.name}
-            </ListItem>
-          ))}
+          <ListItem button onClick={() => navigate('/balletCamera')}>
+            <ReportIcon sx={{ color: '#FF1493', mr: 1 }} /> New Analysis
+          </ListItem>
         </List>
 
         <Divider />

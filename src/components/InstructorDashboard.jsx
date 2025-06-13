@@ -15,6 +15,7 @@ import {
 } from '@mui/material';
 import { Upload as UploadIcon, Delete as DeleteIcon, Share as ShareIcon } from '@mui/icons-material';
 import axios from 'axios';
+import { config } from '../config/config';
 
 const InstructorDashboard = () => {
   const [videos, setVideos] = useState([]);
@@ -31,7 +32,7 @@ const InstructorDashboard = () => {
     formData.append('video', file);
 
     try {
-      const response = await axios.post('http://localhost:8000/upload-video', formData);
+      const response = await axios.post(`${config.API_URL}/upload-video`, formData);
       setVideos([...videos, {
         id: response.data.id,
         title: file.name,
@@ -53,7 +54,7 @@ const InstructorDashboard = () => {
 
   const handleDelete = async (videoId) => {
     try {
-      await axios.delete(`http://localhost:8000/videos/${videoId}`);
+      await axios.delete(`${config.API_URL}/videos/${videoId}`);
       setVideos(videos.filter(video => video.id !== videoId));
     } catch (error) {
       console.error('Error deleting video:', error);

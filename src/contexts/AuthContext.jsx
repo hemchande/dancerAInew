@@ -7,6 +7,7 @@ import {
   onAuthStateChanged
 } from 'firebase/auth';
 import axios from 'axios';
+import { config } from '../config/config';
 
 const AuthContext = createContext();
 
@@ -30,7 +31,7 @@ export const AuthProvider = ({ children }) => {
           const token = await getAuthToken();
           console.log(token)
           // Get user profile from backend
-          const response = await axios.get(`http://localhost:8000/auth/profile`, {
+          const response = await axios.get(`${config.API_URL}/auth/profile`, {
             headers: {
               Authorization: `Bearer ${token}`
             }
@@ -43,7 +44,7 @@ export const AuthProvider = ({ children }) => {
           // If profile doesn't exist, create it
           try {
             const token = await getAuthToken();
-            const response = await axios.post('http://localhost:8000/auth/register', {
+            const response = await axios.post(`${config.API_URL}/auth/register`, {
               uid: firebaseUser.uid,
               email: firebaseUser.email,
               name: firebaseUser.displayName || firebaseUser.email.split('@')[0],
@@ -78,7 +79,7 @@ export const AuthProvider = ({ children }) => {
       const token = await getAuthToken();
 
       // Register user in backend
-      await axios.post('http://localhost:8000/auth/register', {
+      await axios.post(`${config.API_URL}/auth/register`, {
         uid: firebaseUser.uid,
         email: firebaseUser.email,
         ...userData
