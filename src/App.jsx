@@ -7,6 +7,7 @@ import axios from 'axios';
 import Stats from './components/Summary';
 import BalletCamera from './components/Camera';
 import BalletCamera1 from './components/newCamera';
+import BalletCamera2 from './components/aiCamera';
 import { OpenAI } from 'openai';
 import InstructorDashboard from './components/InstructorDashboard';
 import PerformerAccess from './components/PerformerAccess';
@@ -422,7 +423,7 @@ const App = () => {
             <Route path="/register" element={<Register />} />
             <Route path="/dashboard" element={<ProtectedRoute><ChatUI /></ProtectedRoute>} />
             <Route path="/chat" element={<ProtectedRoute><ChatUI /></ProtectedRoute>} />
-            <Route path="/balletCamera" element={<ProtectedRoute><BalletCamera1 /></ProtectedRoute>} />
+            <Route path="/balletCamera" element={<ProtectedRoute><BalletCamera2 /></ProtectedRoute>} />
             <Route path="/" element={<Navigate to="/login" replace />} />
           </Routes>
         </ChatProvider>

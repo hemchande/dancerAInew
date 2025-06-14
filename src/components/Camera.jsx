@@ -18,12 +18,48 @@ const BalletCamera = () => {
   const [isLoading, setIsLoading] = useState(false);
   const canvasRef = useRef(null);
   const webcamRef = useRef(null);
+
   const [frameQueue, setFrameQueue] = useState([]);
+
+  console.log(process.env.REACT_APP_OPENAI_API_KEY)
+
+  const enqueueFrame = useCallback(() => {
+  if (!webcamRef.current || !webcamRef.current.video) return;
+  const video = webcamRef.current.video;
+  const canvas = document.createElement("canvas");
+  canvas.width = video.videoWidth;
+  canvas.height = video.videoHeight;
+  const ctx = canvas.getContext("2d");
+  ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+  const imageDataUrl = canvas.toDataURL("image/jpeg");
+  setFrameQueue(q => [...q, imageDataUrl]);
+}, []);
+
+// const enqueueFrame = useCallback(() => {
+//   const video = webcamRef.current.video;
+//   const canvas = document.createElement("canvas");
+//   canvas.width = video.videoWidth;
+//   canvas.height = video.videoHeight;
+//   const ctx = canvas.getContext("2d");
+//   ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+//   const imageDataUrl = canvas.toDataURL("image/png");
+
+//   setFrameQueue((q) => [...q, imageDataUrl]);
+// }, []);
+
+
+
+
+
+  // const [frameQueue, setFrameQueue] = useState([]);
   const [isProcessing, setIsProcessing] = useState(false);
   const [fullFeedbackLog, setFullFeedbackLog] = useState([]);
   const [scores, setScores] = useState(null);
 
   const frameCounterRef = useRef(0);
+
+
+  
 
   const openai = new OpenAI({
     apiKey: process.env.REACT_APP_OPENAI_API_KEY
@@ -60,17 +96,71 @@ const BalletCamera = () => {
   };
   
 
-  const enqueueFrame = useCallback(() => {
-    const video = webcamRef.current.video;
-    const canvas = document.createElement("canvas");
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
-    const ctx = canvas.getContext("2d");
-    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-    const imageDataUrl = canvas.toDataURL("image/png");
+  // const enqueueFrame = useCallback(() => {
+  //   const video = webcamRef.current.video;
+  //   const canvas = document.createElement("canvas");
+  //   canvas.width = video.videoWidth;
+  //   canvas.height = video.videoHeight;
+  //   const ctx = canvas.getContext("2d");
+  //   ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+  //   const imageDataUrl = canvas.toDataURL("image/png");
 
-    setFrameQueue((q) => [...q, imageDataUrl]);
-  }, []);
+  //   setFrameQueue((q) => [...q, imageDataUrl]);
+  // }, []);
+
+
+
+  async function generateFeedbackFromImages(images, onToken, setIsLoading) {
+    try {
+      if (setIsLoading) setIsLoading(true);
+  
+      // Prepare content array for OpenAI API (text + images)
+      const contentArr = [
+        {
+          type: 'text',
+          text: `Examine these dance sequence frames. 
+  For each, briefly describe the pose and offer corrections.
+  Then, synthesize feedback about overall movement quality and transitions.`
+        },
+        ...images.map(img => ({
+          type: "image_url",
+          image_url: {
+            url: img, // Already a dataURL
+            detail: "high"
+          }
+        }))
+      ];
+  
+      const messages = [
+        { role: "system", content: "You are a professional ballet technique coach." },
+        { role: "user", content: contentArr }
+      ];
+  
+      const stream = await openai.chat.completions.create({
+        model: "gpt-4o", // Or another model
+        messages,
+        max_tokens: 700,
+        temperature: 0.7,
+        stream: true
+      });
+  
+      let fullMessage = '';
+      for await (const chunk of stream) {
+        const token = chunk.choices[0]?.delta?.content || '';
+        fullMessage += token;
+        if (onToken) onToken(token);
+        setFullFeedbackLog(prevLog => [...prevLog, token]);
+      }
+  
+      return fullMessage;
+    } catch (err) {
+      console.error("Streaming error:", err);
+      return "Error generating feedback.";
+    } finally {
+      if (setIsLoading) setIsLoading(false);
+    }
+  }
+  
   
 
   async function generateFeedbackFromImage(imagePath, onToken, setIsLoading) {
@@ -130,30 +220,64 @@ const BalletCamera = () => {
   useEffect(() => {
     const captureInterval = setInterval(() => {
       if (!webcamRef.current || !webcamRef.current.video) return;
-
+  
       frameCounterRef.current += 1;
-      if (frameCounterRef.current % 10 === 0) {
-        enqueueFrame();
-      }
-    }, 1000); // every 1s; adjust for faster capture
-
+      // Capture every 1s or adjust as needed
+      enqueueFrame();
+    }, 1000);
+  
     return () => clearInterval(captureInterval);
   }, [enqueueFrame]);
-
+  
+  // New effect: triggers when batch is full
   useEffect(() => {
-    if (!isProcessing && frameQueue.length > 0) {
-      const nextImage = frameQueue[0];
+    if (!isProcessing && frameQueue.length >= 10) {
+      // Optional: sample frames (e.g., every Nth frame for more diversity)
+      // const sampledFrames = frameQueue.filter((_, i) => i % 2 === 0).slice(0, 10);
+      const sampledFrames = frameQueue.slice(0, 10);
+  
       setIsProcessing(true);
       setFeedback("");
-
-      generateFeedbackFromImage(nextImage, (token) => {
-        setFeedback((prev) => (prev || '') + token);
-      }, setIsLoading).then(() => {
+  
+      generateFeedbackFromImages(
+        sampledFrames,
+        token => setFeedback(prev => (prev || "") + token),
+        setIsLoading
+      ).then(() => {
         setIsProcessing(false);
-        setFrameQueue((q) => q.slice(1));
+        setFrameQueue(q => q.slice(10)); // Remove processed frames
       });
     }
   }, [frameQueue, isProcessing]);
+  
+
+  // useEffect(() => {
+  //   const captureInterval = setInterval(() => {
+  //     if (!webcamRef.current || !webcamRef.current.video) return;
+
+  //     frameCounterRef.current += 1;
+  //     if (frameCounterRef.current % 10 === 0) {
+  //       enqueueFrame();
+  //     }
+  //   }, 1000); // every 1s; adjust for faster capture
+
+  //   return () => clearInterval(captureInterval);
+  // }, [enqueueFrame]);
+
+  // useEffect(() => {
+  //   if (!isProcessing && frameQueue.length > 0) {
+  //     const nextImage = frameQueue[0];
+  //     setIsProcessing(true);
+  //     setFeedback("");
+
+  //     generateFeedbackFromImage(nextImage, (token) => {
+  //       setFeedback((prev) => (prev || '') + token);
+  //     }, setIsLoading).then(() => {
+  //       setIsProcessing(false);
+  //       setFrameQueue((q) => q.slice(1));
+  //     });
+  //   }
+  // }, [frameQueue, isProcessing]);
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -174,27 +298,7 @@ const BalletCamera = () => {
   }, []);
   
 
-  // const renderFeedback = () => (
-  //   <Paper
-  //     sx={{
-  //       p: 2,
-  //       mt: 2,
-  //       backgroundColor: '#FF1493',
-  //       color: 'white',
-  //       maxHeight: '300px',
-  //       overflowY: 'auto',
-  //       borderRadius: 2,
-  //       boxShadow: 3,
-  //       whiteSpace: 'pre-wrap',
-  //       fontFamily: 'monospace',
-  //     }}
-  //     elevation={3}
-  //   >
-  //     <Typography variant="body1" align="left">
-  //       {feedback}
-  //     </Typography>
-  //   </Paper>
-  // );
+  
 
   const renderFeedback = () => (
     <Paper

@@ -133,7 +133,10 @@ const BalletCamera1 = () => {
   const [isSessionActive, setIsSessionActive] = useState(false);
 
 
-  const FRAME_BATCH_SIZE = 5;
+  console.log(process.env.REACT_APP_OPENAI_API_KEY)
+
+
+  const FRAME_BATCH_SIZE = 10;
   const [frameBuffer, setFrameBuffer] = useState([]);
   const openai = new OpenAI({
     apiKey: process.env.REACT_APP_OPENAI_API_KEY,
@@ -154,7 +157,7 @@ const BalletCamera1 = () => {
     setFrameQueue((q) => [...q, imageDataUrl]);
   }, []);
 
-  // Add session timer effect
+ 
   useEffect(() => {
     let timer;
     if (isSessionActive && sessionStartTime) {
@@ -169,6 +172,29 @@ const BalletCamera1 = () => {
     return () => clearInterval(timer);
   }, [isSessionActive, sessionStartTime]);
 
+
+  // useEffect(() => {
+  //   if (!isSessionActive) return; // Only collect during session
+  
+  //   const interval = setInterval(() => {
+  //     if (!webcamRef.current || !webcamRef.current.video) return;
+  
+  //     // Capture a frame
+  //     const video = webcamRef.current.video;
+  //     const canvas = document.createElement("canvas");
+  //     canvas.width = video.videoWidth;
+  //     canvas.height = video.videoHeight;
+  //     const ctx = canvas.getContext("2d");
+  //     ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+  //     const imageDataUrl = canvas.toDataURL("image/jpeg", 0.7);
+  
+  //     setFrameBuffer(prev => [...prev, imageDataUrl]);
+  //   }, 300); // About 3 FPS; tweak as needed
+  
+  //   return () => clearInterval(interval);
+  // }, [isSessionActive]);
+  
+
   const startNewSession = () => {
     setSessionStartTime(Date.now());
     setIsSessionActive(true);
@@ -179,14 +205,18 @@ const BalletCamera1 = () => {
 
 
   const generateFeedbackFromFrames = async (imageFrames) => {
-    if (!isSessionActive) return;
+    if (!isSessionActive || !imageFrames.length) return;
   
     try {
       setIsLoading(true);
   
+      // Prepare OpenAI messages with multiple image frames
       const userMessage = [
-        { type: 'text', text: 'Please analyze this dance sequence and provide feedback across frames. Mention posture changes, errors, and transitions.' },
-        ...imageFrames.map(img => ({ type: 'image_url', image_url: { url: img } }))
+        { type: 'text', text: 'Analyze this dance sequence (10 frames). Provide feedback on posture, errors, and transitions.' },
+        ...imageFrames.map(img => ({
+          type: 'image_url',
+          image_url: { url: img }
+        }))
       ];
   
       const stream = await openai.chat.completions.create({
@@ -194,22 +224,11 @@ const BalletCamera1 = () => {
         messages: [
           {
             role: 'system',
-            content: 'You are a professional ballet coach. Provide feedback across a sequence of frames. Identify patterns in posture, movement, alignment, and give actionable corrections.'
+            content: 'You are a professional ballet coach. Provide frame-by-frame and overall feedback for the sequence.'
           },
           {
             role: 'user',
-            content: `EXAMPLE: Review the following ballet sequence: [arms rounded but not fully extended, knees bent on landing, head looking down, transition from arabesque to plié is rushed]
-          
-          Feedback:
-          - Arms: Extend elbows fully and maintain rounded shape; avoid drooping wrists.
-          - Knees: Soften the landing by absorbing with the full foot and straightening after.
-          - Head: Keep chin lifted and gaze forward for better posture.
-          - Transition: Slow down the shift from arabesque to plié for better control and fluidity.`
-          },
-          {
-            role: 'user',
-            content: `Now, review this ballet sequence: ${userMessage}
-Provide feedback in a similar concise, body-part-organized format.`
+            content: userMessage
           }
         ],
         max_tokens: 700,
@@ -225,13 +244,17 @@ Provide feedback in a similar concise, body-part-organized format.`
   
       setAccumulatedFeedback(prev => prev + "\n\n" + fullMessage);
       if (!sessionImage) setSessionImage(imageFrames[0]);
-  
       if (currentChatSession) {
         await saveCameraFeedback(fullMessage, imageFrames[0], currentChatSession._id);
       }
-  
       await analyzeFeedback(fullMessage);
       setIsLoading(false);
+  
+      // Optionally log feedback points for timeline
+      setFullFeedbackLog(log => [
+        ...log,
+        { img: imageFrames[0], text: fullMessage }
+      ]);
     } catch (error) {
       console.error('Error generating feedback:', error);
       setIsLoading(false);
