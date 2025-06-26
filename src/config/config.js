@@ -9,7 +9,8 @@ export const config = {
     appId: process.env.REACT_APP_FIREBASE_APP_ID,
     measurementId: process.env.REACT_APP_FIREBASE_MEASUREMENT_ID
   },
-  OPENAI_API_KEY: process.env.REACT_APP_OPENAI_API_KEY
+  OPENAI_API_KEY: process.env.REACT_APP_OPENAI_API_KEY,
+  MESH_SERVICE_API_URL:process.env.MESH_SERVICE_API_URL
 };
 
 export default config; 

@@ -11,11 +11,7 @@ const app = express();
 
 const router = express.Router();
 
-
-
-
 const PORT = process.env.PORT || 8000;
-
 
 app.use(cors({
   origin: 'http://localhost:3000', // Set the allowed origin for requests http://localhost:3000 https://connectarts-frontend-2.onrender.com
@@ -50,10 +46,6 @@ app.use(function(req, res, next) {
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
-
-
-
-
 // MongoDB Connection with proper options
 const MONGODB_URI = process.env.MONGODB_URI || 'mongodb+srv://hemchande:He10072638@cluster0.r51ez.mongodb.net/danceai?retryWrites=true&w=majority';
 
@@ -64,8 +56,6 @@ mongoose.connect(MONGODB_URI, {
 })
 .then(() => console.log('Connected to MongoDB'))
 .catch(err => console.error('MongoDB connection error:', err));
-
-
 
 app.get('/', (req, res) => {
   res.send('CORS is set!');

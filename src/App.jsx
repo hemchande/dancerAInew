@@ -5,9 +5,7 @@ import { AppBar, Toolbar, Typography, Box, Container, List, ListItem, Divider, C
 import { YouTube, Search, SmartToy, History as HistoryIcon, Feedback as FeedbackIcon, Chat as ChatIcon, Assessment as ReportIcon, AccountCircle, VideoCall as VideoCallIcon, Add as AddIcon, Delete as DeleteIcon } from '@mui/icons-material';
 import axios from 'axios';
 import Stats from './components/Summary';
-import BalletCamera from './components/Camera';
-import BalletCamera1 from './components/newCamera';
-import BalletCamera2 from './components/aiCamera';
+import BalletCamera from './components/aiCamera';
 import { OpenAI } from 'openai';
 import InstructorDashboard from './components/InstructorDashboard';
 import PerformerAccess from './components/PerformerAccess';
@@ -423,7 +421,7 @@ const App = () => {
             <Route path="/register" element={<Register />} />
             <Route path="/dashboard" element={<ProtectedRoute><ChatUI /></ProtectedRoute>} />
             <Route path="/chat" element={<ProtectedRoute><ChatUI /></ProtectedRoute>} />
-            <Route path="/balletCamera" element={<ProtectedRoute><BalletCamera2 /></ProtectedRoute>} />
+            <Route path="/balletCamera" element={<ProtectedRoute><BalletCamera /></ProtectedRoute>} />
             <Route path="/" element={<Navigate to="/login" replace />} />
           </Routes>
         </ChatProvider>

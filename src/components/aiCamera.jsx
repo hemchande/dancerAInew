@@ -17,6 +17,9 @@ import { useAuth } from '../contexts/AuthContext';
 import axios from 'axios';
 import config from '../config/config';
 import { OpenAI } from 'openai';
+import { useWebSocket } from '../utils/useWebSocket';
+import WebcamComponent from './webCamComponent';
+
 
 const overlayActions = ["Arabesque", "Attitude", "Ballon", "Battement", "Brisé", "Cabriole", "Changement", "Chassé"];
 
@@ -64,10 +67,11 @@ const ScoreCard = styled(Paper)(({ theme }) => ({
 
 const FRAME_BATCH_SIZE = 10;
 
-const BalletCamera2 = () => {
+const BalletCamera = () => {
   // Context & State
   const { user, getAuthToken } = useAuth();
   const { createChatSession, saveCameraFeedback } = useChat();
+  const [meshImageUrl, setMeshImageUrl] = useState(null);
 
   const [feedback, setFeedback] = useState("No feedback yet.");
   const [isLoading, setIsLoading] = useState(false);
@@ -78,6 +82,7 @@ const BalletCamera2 = () => {
   const [currentChatSession, setCurrentChatSession] = useState(null);
   const [selectedRecipient, setSelectedRecipient] = useState('');
   const [isSyncing, setIsSyncing] = useState(false);
+  const [intervalId, setIntervalId] = useState(null);
   const [expandedFeedbackIndex, setExpandedFeedbackIndex] = useState(null);
   const [isLoadingSessions, setIsLoadingSessions] = useState(false);
   const [sessionImage, setSessionImage] = useState(null);
@@ -86,9 +91,23 @@ const BalletCamera2 = () => {
   const [isSessionActive, setIsSessionActive] = useState(false);
   const [sessionStartTime, setSessionStartTime] = useState(null);
   const [frameBuffer, setFrameBuffer] = useState([]);
-  const webcamRef = useRef(null);
+  const videoRef = useRef(null);
   const canvasRef = useRef(null);
+  const [feedbackImages, setFeedbackImages] = useState([]);
+  const webcamRef = useRef(null);
+  // const canvasRef = useRef(null);
   const feedbackContainerRef = useRef(null);
+
+  const [latestMeshImage, setLatestMeshImage] = useState(null);
+  const sendFrame = useWebSocket(user.uid, (meshImage) => {
+    console.log('🎯 Mesh result received from WebSocket:', meshImage ? 'Image data received' : 'No image data');
+    setLatestMeshImage(meshImage);
+  });
+
+  // Debug logging for mesh state
+  useEffect(() => {
+    console.log('🔄 latestMeshImage state changed:', latestMeshImage ? 'Has data' : 'No data');
+  }, [latestMeshImage]);
 
   const openai = new OpenAI({
     apiKey: process.env.REACT_APP_OPENAI_API_KEY,
@@ -118,6 +137,15 @@ const BalletCamera2 = () => {
   }, [isSessionActive, sessionStartTime]);
 
   // --- START SESSION ---
+  // const startNewSession = () => {
+  //   setSessionStartTime(Date.now());
+  //   setIsSessionActive(true);
+  //   setAccumulatedFeedback("");
+  //   setSessionImage(null);
+  //   setFeedback("Session started. Feedback will appear here...");
+  //   setFullFeedbackLog([]);
+  // };
+
   const startNewSession = () => {
     setSessionStartTime(Date.now());
     setIsSessionActive(true);
@@ -125,6 +153,47 @@ const BalletCamera2 = () => {
     setSessionImage(null);
     setFeedback("Session started. Feedback will appear here...");
     setFullFeedbackLog([]);
+  };
+
+  const dataURLToBlob = (dataURL) => {
+    if (!dataURL || !dataURL.includes(',')) {
+      console.error('Invalid dataURL:', dataURL);
+      return null;
+    }
+    const parts = dataURL.split(',');
+    const byteString = atob(parts[1]);
+    const mimeString = parts[0].split(':')[1].split(';')[0];
+    const ab = new ArrayBuffer(byteString.length);
+    const ia = new Uint8Array(ab);
+    for (let i = 0; i < byteString.length; i++) {
+      ia[i] = byteString.charCodeAt(i);
+    }
+    return new Blob([ab], { type: mimeString });
+  };
+
+  const uploadFrameToInference = async (imageDataUrl) => {
+    try {
+      const blob = dataURLToBlob(imageDataUrl);
+      if (!blob) throw new Error('Blob conversion failed');
+
+      const formData = new FormData();
+      formData.append('image', blob, 'frame.jpg');
+
+      const response = await fetch('http://localhost:8001/upload-frame', {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (!response.ok) {
+        throw new Error(`Upload failed: ${response.statusText}`);
+      }
+
+      const imageBlob = await response.blob();
+      return URL.createObjectURL(imageBlob);
+    } catch (err) {
+      console.error('Error generating feedback:', err);
+      throw err;
+    }
   };
 
   // --- FRAME CAPTURE BATCHING ---
@@ -160,6 +229,9 @@ const BalletCamera2 = () => {
 
     try {
       setIsLoading(true);
+
+      // const meshUrl = await uploadFrameToInference(imageFrames[0]);
+      // setMeshImageUrl(meshUrl);
 
       // Multi-frame OpenAI input
       const userMessage = [
@@ -205,8 +277,14 @@ const BalletCamera2 = () => {
       // Log feedback points for timeline
       setFullFeedbackLog(log => [
         ...log,
-        { img: imageFrames[0], text: fullMessage }
+        { img: imageFrames[imageFrames.length - 1], text: fullMessage }
       ]);
+
+
+      const meshUrl = await uploadFrameToInference(imageFrames[imageFrames.length - 1]);
+      setMeshImageUrl(meshUrl);
+
+
     } catch (error) {
       console.error('Error generating feedback:', error);
       setIsLoading(false);
@@ -380,10 +458,18 @@ const BalletCamera2 = () => {
       await saveCurrentSession();
       await fetchAISessions(); // Fetch updated sessions after saving
     }
+  
+    // Clear the interval that was sending frames
+    if (intervalId) {
+      clearInterval(intervalId);
+      setIntervalId(null);
+    }
+  
     setIsSessionActive(false);
     setSessionStartTime(null);
     setFeedback("Session ended. Start a new session to continue.");
   };
+  
 
   // Update the end session button click handler
   const endSessionButton = (
@@ -520,7 +606,7 @@ const BalletCamera2 = () => {
       </Box>
 
       <Box sx={{ display: 'flex', height: '100vh', backgroundColor: '#FAFAFA' }}>
-        <Box sx={{ flex: 1, overflow: 'auto', p: 3, backgroundColor: '#FAFAFA' }}>
+        <Box sx={{ flex: '0 1 1000px', overflow: 'auto', p: 3, backgroundColor: '#FAFAFA' }}>
           <StyledCard>
             <CardContent sx={{ p: 3 }}>
               {/* Camera & Stats */}
@@ -560,26 +646,174 @@ const BalletCamera2 = () => {
                 </StatCard>
               </Box>
 
-              {/* Webcam */}
+              {/* Webcam with Mesh Overlay */}
               <Box sx={{ border: '2px solid rgba(255, 20, 147, 0.2)', borderRadius: '16px', overflow: 'hidden', position: 'relative', width: '100%', maxWidth: '640px', margin: '0 auto', boxShadow: '0 4px 12px rgba(255, 20, 147, 0.1)' }}>
                 <Webcam ref={webcamRef} style={{ width: '100%', height: 'auto', display: 'block' }} videoConstraints={{ width: 640, height: 480, facingMode: "user" }} />
                 <canvas ref={canvasRef} width={640} height={480} style={{ display: 'none' }} />
+                
+                {/* Mesh Overlay */}
+                {latestMeshImage && (
+                  <Box sx={{
+                    position: 'absolute',
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    pointerEvents: 'none',
+                    zIndex: 10
+                  }}>
+                    <img 
+                      src={`data:image/jpeg;base64,${latestMeshImage}`} 
+                      alt="Pose Mesh Overlay" 
+                      style={{ 
+                        width: '100%', 
+                        height: '100%', 
+                        objectFit: 'cover',
+                        opacity: 0.8,
+                        mixBlendMode: 'multiply'
+                      }} 
+                    />
+                  </Box>
+                )}
+                
+                {/* Overlay Status Indicator */}
+                {latestMeshImage && (
+                  <Box sx={{
+                    position: 'absolute',
+                    top: 10,
+                    right: 10,
+                    backgroundColor: 'rgba(0, 255, 0, 0.9)',
+                    color: 'white',
+                    padding: '4px 8px',
+                    borderRadius: '12px',
+                    fontSize: '0.75rem',
+                    fontWeight: 600,
+                    zIndex: 20
+                  }}>
+                    ✅ Live Mesh
+                  </Box>
+                )}
+              </Box>
+              <Box sx={{ display: 'flex', gap: 2, alignItems: 'flex-start', justifyContent: 'center', mt: 2 }}>
+                {/* <Box>
+                  <Webcam ref={webcamRef} />
+                </Box> */}
+
+                <WebcamComponent sendFrame={sendFrame} />
+
+                {meshImageUrl && (
+                  <Box>
+                    <Typography variant="caption" sx={{ color: '#FF1493', fontWeight: 600 }}>
+                      3D Mesh (Latest)
+                    </Typography>
+                    <img src={meshImageUrl} alt="3D mesh" style={{ width: 320, height: 480, borderRadius: 12, border: '2px solid #FF1493' }} />
+                  </Box>
+                )}
+
+                {/* WebSocket Mesh Results Display */}
+                <Box sx={{ mt: 2, p: 2, backgroundColor: '#FFF0F5', borderRadius: '12px', border: '2px solid #cccccc', minWidth: '320px' }}>
+                  <Typography variant="h6" sx={{ color: '#FF1493', mb: 2, textAlign: 'center', fontSize: '1rem' }}>
+                    🎯 Real-time Mesh Results
+                  </Typography>
+                  
+                  {latestMeshImage ? (
+                    <Box sx={{ textAlign: 'center' }}>
+                      <Typography variant="caption" sx={{ 
+                        color: '#00ff00', 
+                        fontWeight: 600, 
+                        display: 'block', 
+                        mb: 1,
+                        fontSize: '0.9rem'
+                      }}>
+                        ✅ Live Pose Mesh (WebSocket)
+                      </Typography>
+                      <img 
+                        src={`data:image/jpeg;base64,${latestMeshImage}`} 
+                        alt="Pose Mesh" 
+                        style={{ 
+                          width: '100%', 
+                          maxWidth: 320, 
+                          height: 'auto', 
+                          borderRadius: 8, 
+                          border: '2px solid #00ff00',
+                          boxShadow: '0 4px 12px rgba(0, 255, 0, 0.2)'
+                        }} 
+                      />
+                    </Box>
+                  ) : (
+                    <Box sx={{ textAlign: 'center' }}>
+                      <Typography variant="body2" sx={{ 
+                        color: '#666666', 
+                        fontWeight: 600, 
+                        display: 'block', 
+                        mb: 1
+                      }}>
+                        ⏳ Waiting for mesh data...
+                      </Typography>
+                      <Typography variant="caption" sx={{ color: '#999999' }}>
+                        Use the send frame button to test
+                      </Typography>
+                    </Box>
+                  )}
+                </Box>
               </Box>
 
               {/* Controls */}
               <Box sx={{ display: 'flex', justifyContent: 'center', mt: 3, gap: 2 }}>
                 {!isSessionActive ? (
-                  <StyledButton 
-                    variant="contained" 
-                    onClick={startNewSession} 
-                    sx={{ 
-                      backgroundColor: '#FF1493', 
-                      color: '#ffffff', 
-                      '&:hover': { backgroundColor: '#FF69B4' } 
-                    }}
-                  >
-                    Start Session
-                  </StyledButton>
+                  <>
+                    <StyledButton 
+                      variant="contained" 
+                      onClick={startNewSession} 
+                      sx={{ 
+                        backgroundColor: '#FF1493', 
+                        color: '#ffffff', 
+                        '&:hover': { backgroundColor: '#FF69B4' } 
+                      }}
+                    >
+                      Start Session
+                    </StyledButton>
+                    <Button 
+                      variant="outlined" 
+                      onClick={() => {
+                        console.log('🎨 Test Mesh Display button clicked');
+                        
+                        // Create a mock mesh result for testing
+                        const canvas = document.createElement("canvas");
+                        canvas.width = 320;
+                        canvas.height = 240;
+                        const ctx = canvas.getContext("2d");
+                        
+                        // Draw a simple mock mesh overlay
+                        ctx.fillStyle = '#00ff00';
+                        ctx.fillRect(0, 0, canvas.width, canvas.height);
+                        ctx.fillStyle = '#ff0000';
+                        ctx.fillRect(50, 50, 50, 50);
+                        ctx.fillStyle = '#0000ff';
+                        ctx.fillRect(150, 100, 50, 50);
+                        
+                        const mockMeshData = canvas.toDataURL("image/jpeg", 0.8);
+                        const base64Data = mockMeshData.split(',')[1];
+                        
+                        console.log('🎨 Canvas created, base64 data length:', base64Data.length);
+                        console.log('🎨 Setting mock mesh result for testing...');
+                        
+                        setLatestMeshImage(base64Data);
+                        
+                        console.log('🎨 setLatestMeshImage called with data');
+                      }}
+                      sx={{ 
+                        borderColor: '#ff6600', 
+                        color: '#ff6600',
+                        '&:hover': { 
+                          borderColor: '#cc5200', 
+                          backgroundColor: 'rgba(255, 102, 0, 0.1)' 
+                        }
+                      }}
+                    >
+                      🎨 Test Mesh Display
+                    </Button>
+                  </>
                 ) : (
                   <>
                     <StyledButton 
@@ -597,6 +831,7 @@ const BalletCamera2 = () => {
                   </>
                 )}
               </Box>
+              
 
               {/* Feedback and Timeline */}
               <Box sx={{ flex: 1, overflow: 'auto', p: 2, maxHeight: 'calc(100vh - 400px)', '&::-webkit-scrollbar': { width: '8px', }, '&::-webkit-scrollbar-track': { background: 'rgba(255, 20, 147, 0.05)', borderRadius: '4px', }, '&::-webkit-scrollbar-thumb': { background: 'rgba(255, 20, 147, 0.2)', borderRadius: '4px', '&:hover': { background: 'rgba(255, 20, 147, 0.3)', }, }, }} ref={feedbackContainerRef}>
@@ -682,7 +917,17 @@ const BalletCamera2 = () => {
         </Box>
 
         {/* Side panel for saved sessions */}
-        <Paper sx={{ width: 360, borderLeft: '1px solid rgba(255, 20, 147, 0.1)', height: '100vh', overflowY: 'auto', backgroundColor: '#FFF0F5', boxShadow: '-4px 0 20px rgba(255, 20, 147, 0.08)' }}>
+        <Paper sx={{ 
+          width: 360, 
+          borderLeft: '1px solid rgba(255, 20, 147, 0.1)', 
+          height: '100vh', 
+          overflowY: 'auto', 
+          backgroundColor: '#FFF0F5', 
+          boxShadow: '-4px 0 20px rgba(255, 20, 147, 0.08)',
+          flexShrink: 0,
+          position: 'relative',
+          zIndex: 1
+        }}>
           <Box sx={{ p: 2.5, borderBottom: '1px solid rgba(255, 20, 147, 0.1)', backgroundColor: '#FF1493', color: 'white' }}>
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <Typography variant="h6" sx={{ fontWeight: 600 }}>Past Sessions</Typography>
@@ -777,4 +1022,4 @@ const BalletCamera2 = () => {
   );
 };
 
-export default BalletCamera2;
+export default BalletCamera;
