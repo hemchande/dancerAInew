@@ -7,26 +7,33 @@ const auth = require('../middleware/auth');
 // Create a new AI report
 router.post('/', auth, async (req, res) => {
   try {
-    const { videoUrl, title, description, feedback, overallScore, summary } = req.body;
-    
+    const { videoUrl, title, description, feedback, overallScore, summary, performanceAnalysis } = req.body;
+    // feedback is an array, map to include all new fields
+    const feedbackWithScores = (feedback || []).map(fb => ({
+      text: fb.text,
+      image: fb.image,
+      frames: fb.frames || [],
+      flexibility: fb.flexibility,
+      alignment: fb.alignment,
+      smoothness: fb.smoothness,
+      energy: fb.energy,
+      explanation: fb.explanation
+    }));
     const report = new AIReport({
       userId: req.user.uid,
       videoUrl,
       title,
       description,
-      feedback,
+      feedback: feedbackWithScores,
       overallScore,
-      summary
+      summary,
+      performanceAnalysis
     });
-
     await report.save();
-
-    // Add report to user's aiReports array
     await User.findOneAndUpdate(
       { uid: req.user.uid },
       { $push: { aiReports: report._id } }
     );
-
     res.status(201).json(report);
   } catch (error) {
     console.error('Error creating AI report:', error);

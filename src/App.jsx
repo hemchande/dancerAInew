@@ -47,6 +47,7 @@ const ChatUI = () => {
         if (!user) return;
         
         const token = await getAuthToken();
+        console.log(config.API_URL)
         const response = await axios.get(`${config.API_URL}/chat/sessions`, {
           headers: {
             Authorization: `Bearer ${token}`

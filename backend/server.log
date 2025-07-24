@@ -1,0 +1,18 @@
+🚀 Server is running on port 8001 with WebSocket support
+Connected to MongoDB
+🔌 WebSocket client connected: 1wTkPM0vvqvoMmtTAAAB
+🌐 Client transport: websocket
+🔗 Client address: ::ffff:127.0.0.1
+👤 User registered: test-correct-port
+🆔 [register] Socket ID: 1wTkPM0vvqvoMmtTAAAB
+📤 Received frame from user: test-correct-port
+🆔 [send_frame] Socket ID: 1wTkPM0vvqvoMmtTAAAB
+📊 Frame data length: 96
+🎯 Processing mesh frame...
+✅ Mock mesh generated successfully
+✅ Mesh result sent to client
+🆔 [mesh_result] Socket ID: 1wTkPM0vvqvoMmtTAAAB
+📊 Mesh data length: 9220
+🔌 WebSocket client disconnected: 1wTkPM0vvqvoMmtTAAAB
+🆔 [disconnect] Socket ID: 1wTkPM0vvqvoMmtTAAAB
+📊 Disconnect reason: client namespace disconnect

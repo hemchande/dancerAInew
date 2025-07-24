@@ -1,13 +1,26 @@
 const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
+const http = require('http');
+const { Server } = require('socket.io');
 const chatRoutes = require('./routes/chat');
 const authRoutes = require('./routes/auth');
 const aiReportRoutes = require('./routes/aiReports');
+const workoutRoutes = require('./routes/workouts');
 const auth = require('./middleware/auth');
 const { applyTimestamps } = require('./models/ChatSession');
 
 const app = express();
+const server = http.createServer(app);
+
+// Create Socket.IO server with CORS configuration
+const io = new Server(server, {
+  cors: {
+    origin: "http://localhost:3000",
+    methods: ["GET", "POST"],
+    credentials: true
+  }
+});
 
 const router = express.Router();
 
@@ -67,6 +80,113 @@ app.use('/auth', authRoutes);
 // Protected routes (auth required)
 app.use('/chat', auth, chatRoutes);
 app.use('/ai-reports', auth, aiReportRoutes);
+app.use('/workouts', workoutRoutes);
+
+// WebSocket connection handling
+io.on('connection', (socket) => {
+  console.log('🔌 WebSocket client connected:', socket.id);
+  console.log('🌐 Client transport:', socket.conn.transport.name);
+  console.log('🔗 Client address:', socket.handshake.address);
+
+  socket.on('register', (data) => {
+    console.log('👤 User registered:', data.user_id);
+    console.log('🆔 [register] Socket ID:', socket.id);
+    socket.userId = data.user_id;
+  });
+
+  socket.on('send_frame', async (data) => {
+    console.log('📤 Received frame from user:', data.user_id);
+    console.log('🆔 [send_frame] Socket ID:', socket.id);
+    console.log('📊 Frame data length:', data.image_data ? data.image_data.length : 'No data');
+    
+    try {
+      // Mock mesh processing - replace with actual mesh processing logic
+      const mockMeshImage = await processMeshFrame(data.image_data);
+      
+      if (mockMeshImage) {
+        // Send mesh result back to the client
+        socket.emit('mesh_result', {
+          user_id: data.user_id,
+          image_b64: mockMeshImage
+        });
+        
+        console.log('✅ Mesh result sent to client');
+        console.log('🆔 [mesh_result] Socket ID:', socket.id);
+        console.log('📊 Mesh data length:', mockMeshImage.length);
+      } else {
+        console.error('❌ No mesh image generated');
+        socket.emit('mesh_error', {
+          user_id: data.user_id,
+          error: 'No mesh image generated'
+        });
+      }
+    } catch (error) {
+      console.error('❌ Error processing mesh frame:', error);
+      socket.emit('mesh_error', {
+        user_id: data.user_id,
+        error: 'Failed to process mesh frame: ' + error.message
+      });
+    }
+  });
+
+  socket.on('disconnect', (reason) => {
+    console.log('🔌 WebSocket client disconnected:', socket.id);
+    console.log('🆔 [disconnect] Socket ID:', socket.id);
+    console.log('📊 Disconnect reason:', reason);
+  });
+});
+
+// Mock mesh processing function - replace with actual implementation
+async function processMeshFrame(imageData) {
+  // This is a mock implementation
+  // In a real implementation, you would:
+  // 1. Decode the base64 image
+  // 2. Process it with your mesh detection model
+  // 3. Return the processed mesh image as base64
+  
+  console.log('🎯 Processing mesh frame...');
+  
+  try {
+    // For now, return a mock mesh image (you can replace this with actual processing)
+    // This creates a simple colored rectangle as a placeholder
+    const canvas = require('canvas');
+    const { createCanvas } = canvas;
+    
+    const width = 320;
+    const height = 480;
+    const canvasInstance = createCanvas(width, height);
+    const ctx = canvasInstance.getContext('2d');
+    
+    // Create a mock mesh visualization
+    ctx.fillStyle = '#FF1493';
+    ctx.fillRect(0, 0, width, height);
+    
+    // Add some mock mesh lines
+    ctx.strokeStyle = '#FFFFFF';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(50, 50);
+    ctx.lineTo(270, 50);
+    ctx.lineTo(270, 430);
+    ctx.lineTo(50, 430);
+    ctx.closePath();
+    ctx.stroke();
+    
+    // Add text
+    ctx.fillStyle = '#FFFFFF';
+    ctx.font = '20px Arial';
+    ctx.fillText('Mesh Overlay', 100, 240);
+    
+    // Convert to base64
+    const result = canvasInstance.toDataURL('image/jpeg').split(',')[1];
+    console.log('✅ Mock mesh generated successfully');
+    return result;
+  } catch (error) {
+    console.error('❌ Error in processMeshFrame:', error);
+    // Return a simple fallback
+    return null;
+  }
+}
 
 // Error handling middleware
 app.use((err, req, res, next) => {
@@ -77,9 +197,9 @@ app.use((err, req, res, next) => {
   res.status(500).json({ message: 'Something went wrong!' });
 });
 
-// Start the server
-app.listen(PORT, () => {
-  console.log(`Server is running on port ${PORT}`);
+// Start the server with Socket.IO
+server.listen(PORT, () => {
+  console.log(`🚀 Server is running on port ${PORT} with WebSocket support`);
 });
 
 // Export the Express API

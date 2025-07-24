@@ -8,6 +8,32 @@ const feedbackSchema = new mongoose.Schema({
   image: {
     type: String,
     required: true
+  },
+  frames: [{
+    type: String
+  }],
+  flexibility: {
+    type: Number,
+    min: 0,
+    max: 100
+  },
+  alignment: {
+    type: Number,
+    min: 0,
+    max: 100
+  },
+  smoothness: {
+    type: Number,
+    min: 0,
+    max: 100
+  },
+  energy: {
+    type: Number,
+    min: 0,
+    max: 100
+  },
+  explanation: {
+    type: String
   }
 });
 
@@ -40,6 +66,13 @@ const aiReportSchema = new mongoose.Schema({
   updatedAt: {
     type: Date,
     default: Date.now
+  },
+  performanceAnalysis: {
+    flexibility: { type: Number, min: 0, max: 100 },
+    alignment: { type: Number, min: 0, max: 100 },
+    smoothness: { type: Number, min: 0, max: 100 },
+    energy: { type: Number, min: 0, max: 100 },
+    explanation: { type: String }
   }
 });
 
