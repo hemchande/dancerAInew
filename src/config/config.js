@@ -1,7 +1,7 @@
 console.log(process.env.REACT_APP_FIREBASE_API_KEY)
 
 export const config = {
-  API_URL: "https://dancerai-backend.vercel.app", 
+  API_URL: "https://dancerai-backend.onrender.com", 
   FIREBASE_CONFIG: {
     apiKey: process.env.REACT_APP_FIREBASE_API_KEY,
     authDomain: process.env.REACT_APP_FIREBASE_AUTH_DOMAIN,
